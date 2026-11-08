@@ -156,8 +156,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
             menu.addItem(item)
         }
         menu.addItem(.separator())
-        // Water level: one agent's usage limit, as radio choices.
-        let waterHeader = NSMenuItem(title: "Water level", action: nil, keyEquivalent: "")
+        // Fuel: what is left of one agent's usage limit, as radio choices.
+        let waterHeader = NSMenuItem(title: "Fuel", action: nil, keyEquivalent: "")
         waterHeader.isEnabled = false
         menu.addItem(waterHeader)
         for source in UsageSource.allCases {

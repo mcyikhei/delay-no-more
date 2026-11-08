@@ -1,6 +1,6 @@
 # Delay No More
 
-A small transparent glass tube on the Mac desktop that holds your to-do cards and shows what your coding agents (Codex and Claude Code) are doing. Native SwiftUI + AppKit, arm64, macOS 13+, no network, no Dock icon. Current version: 1.10.1.
+A small transparent glass tube on the Mac desktop that holds your to-do cards and shows what your coding agents (Codex and Claude Code) are doing. Native SwiftUI + AppKit, arm64, macOS 13+, no network, no Dock icon. Current version: 1.10.2.
 
 ```
 Package.swift
@@ -26,7 +26,7 @@ The app has no Dock icon; it lives in the menu bar (stack icon). Only one copy r
 - **Reorder:** drag a card; others slide aside. Release outside the tube to cancel. Drop on the mouth to move to the top.
 - **Complete:** double-click the top card (only the top card can complete). Undo is in the menu bar for 10 s.
 - **Move / dock:** drag the glass or face. Drop within 20 pt of a screen side to dock; it tucks after 700 ms and reveals on hover (250 ms) or click.
-- **Menu bar** (stack icon): Show/Hide, Undo, ✓ Codex activity / ✓ Claude Code activity, Water level, storage recovery, Quit.
+- **Menu bar** (stack icon): Show/Hide, Undo, ✓ Codex activity / ✓ Claude Code activity, Fuel, storage recovery, Quit.
 
 ## Agent status
 The glass gets a glowing colored outline (no fill, no animation), readable on light and dark desktops:
@@ -54,7 +54,7 @@ All sessions of both agents combine into one status: yellow > blue > red > green
 Both keep all other settings and save a `*.delay-no-more.<uuid>.backup.json` before the first change. Codex needs the hooks trusted in Settings > Hooks. Claude Code loads hooks when a session starts (review with `/hooks`). Moving the app means reinstalling. `--remove-hooks <agent>` removes only this app's handlers.
 
 ## Usage water
-The tube holds still, clear blue water showing how much of an agent's usage limit is **left**: full = nothing used, half = half left, empty = used up. It refills when the limit resets. Cards float in front of it. Choose the source in the menu bar under **Water level**:
+The tube holds still, clear blue water with a gently waved surface, showing how much of an agent's usage limit is **left**: full = nothing used, half = half left, empty = used up. It refills when the limit resets. Cards float in front of it. Choose the source in the menu bar under **Fuel**:
 
 | Choice | Limit shown | Where the number comes from |
 |---|---|---|

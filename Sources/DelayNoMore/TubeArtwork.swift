@@ -41,18 +41,50 @@ struct TubeWater: View {
             let width = geometry.size.width - 2 * TubeMetrics.wallInset
             let height = max(0, geometry.size.height - top - 8)
             let level = height * CGFloat(min(1, max(0, fraction)))
-            Rectangle()
-                .fill(LinearGradient(colors: [StackTheme.water.opacity(0.12), StackTheme.water.opacity(0.26)],
-                                     startPoint: .top, endPoint: .bottom))
-                .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.45)).frame(height: 0.75) }
-                .frame(height: level)
-                .frame(width: width, height: height, alignment: .bottom)
-                .clipShape(VesselShape())
-                .position(x: geometry.size.width / 2, y: top + height / 2)
+            ZStack {
+                WaterShape(level: level, closed: true)
+                    .fill(LinearGradient(colors: [StackTheme.water.opacity(0.12), StackTheme.water.opacity(0.26)],
+                                         startPoint: .top, endPoint: .bottom))
+                WaterShape(level: level, closed: false)
+                    .stroke(.white.opacity(0.45), lineWidth: 0.75)
+            }
+            .frame(width: width, height: height)
+            .clipShape(VesselShape())
+            .position(x: geometry.size.width / 2, y: top + height / 2)
         }
         .opacity(fraction > 0 ? 1 : 0)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+}
+
+/// Water body with a still, gently waved surface: two overlapping sine waves.
+/// `closed` fills the water; otherwise only the surface line is drawn.
+private struct WaterShape: Shape {
+    let level: CGFloat
+    let closed: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let surface = rect.maxY - level
+        // Calm the waves near empty so they never poke below the base.
+        let amplitude = min(1.8, max(0, level / 3))
+        func y(_ x: CGFloat) -> CGFloat {
+            let t = (x - rect.minX) / max(1, rect.width) * 2 * .pi
+            return surface + amplitude * (sin(t * 1.5) + 0.45 * sin(t * 3.6 + 1.2))
+        }
+        return Path { path in
+            path.move(to: CGPoint(x: rect.minX, y: y(rect.minX)))
+            var x = rect.minX
+            while x < rect.maxX {
+                x = min(rect.maxX, x + 1)
+                path.addLine(to: CGPoint(x: x, y: y(x)))
+            }
+            if closed {
+                path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+                path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+                path.closeSubpath()
+            }
+        }
     }
 }
 
