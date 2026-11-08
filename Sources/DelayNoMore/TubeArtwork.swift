@@ -45,8 +45,12 @@ struct TubeWater: View {
                 WaterShape(level: level, closed: true)
                     .fill(LinearGradient(colors: [StackTheme.water.opacity(0.12), StackTheme.water.opacity(0.26)],
                                          startPoint: .top, endPoint: .bottom))
+                // Soft surface: a faint blurred sheen under a thin highlight.
                 WaterShape(level: level, closed: false)
-                    .stroke(.white.opacity(0.45), lineWidth: 0.75)
+                    .stroke(.white.opacity(0.18), lineWidth: 3)
+                    .blur(radius: 1.5)
+                WaterShape(level: level, closed: false)
+                    .stroke(.white.opacity(0.4), style: StrokeStyle(lineWidth: 0.9, lineCap: .round))
             }
             .frame(width: width, height: height)
             .clipShape(VesselShape())
@@ -58,7 +62,8 @@ struct TubeWater: View {
     }
 }
 
-/// Water body with a still, gently waved surface: two overlapping sine waves.
+/// Water body with a still, soft surface: one long swell that crests near the
+/// left quarter, dips past the middle and rises again at the right wall.
 /// `closed` fills the water; otherwise only the surface line is drawn.
 private struct WaterShape: Shape {
     let level: CGFloat
@@ -67,10 +72,10 @@ private struct WaterShape: Shape {
     func path(in rect: CGRect) -> Path {
         let surface = rect.maxY - level
         // Calm the waves near empty so they never poke below the base.
-        let amplitude = min(1.8, max(0, level / 3))
+        let amplitude = min(2.2, max(0, level / 3))
         func y(_ x: CGFloat) -> CGFloat {
-            let t = (x - rect.minX) / max(1, rect.width) * 2 * .pi
-            return surface + amplitude * (sin(t * 1.5) + 0.45 * sin(t * 3.6 + 1.2))
+            let u = (x - rect.minX) / max(1, rect.width)
+            return surface + amplitude * sin(2 * .pi * (u - 0.45) / 0.8)
         }
         return Path { path in
             path.move(to: CGPoint(x: rect.minX, y: y(rect.minX)))

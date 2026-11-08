@@ -1,6 +1,6 @@
 # Delay No More
 
-A small transparent glass tube on the Mac desktop that holds your to-do cards and shows what your coding agents (Codex and Claude Code) are doing. Native SwiftUI + AppKit, arm64, macOS 13+, no network, no Dock icon. Current version: 1.10.2.
+A small transparent glass tube on the Mac desktop that holds your to-do cards and shows what your coding agents (Codex and Claude Code) are doing. Native SwiftUI + AppKit, arm64, macOS 13+, no network, no Dock icon. Current version: 1.10.3.
 
 ```
 Package.swift
@@ -54,7 +54,7 @@ All sessions of both agents combine into one status: yellow > blue > red > green
 Both keep all other settings and save a `*.delay-no-more.<uuid>.backup.json` before the first change. Codex needs the hooks trusted in Settings > Hooks. Claude Code loads hooks when a session starts (review with `/hooks`). Moving the app means reinstalling. `--remove-hooks <agent>` removes only this app's handlers.
 
 ## Usage water
-The tube holds still, clear blue water with a gently waved surface, showing how much of an agent's usage limit is **left**: full = nothing used, half = half left, empty = used up. It refills when the limit resets. Cards float in front of it. Choose the source in the menu bar under **Fuel**:
+The tube holds still, clear blue water with a soft, single-swell surface, showing how much of an agent's usage limit is **left**: full = nothing used, half = half left, empty = used up. It refills when the limit resets. Cards float in front of it. Choose the source in the menu bar under **Fuel**:
 
 | Choice | Limit shown | Where the number comes from |
 |---|---|---|
