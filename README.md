@@ -26,7 +26,7 @@ The app has no Dock icon; it lives in the menu bar (stack icon). Only one copy r
 - **Reorder:** drag a card; others slide aside. Release outside the tube to cancel. Drop on the mouth to move to the top.
 - **Complete:** double-click the top card (only the top card can complete). Undo is in the menu bar for 10 s.
 - **Move / dock:** drag the glass or face. Drop within 20 pt of a screen side to dock; it tucks after 700 ms and reveals on hover (250 ms) or click.
-- **Menu bar** (stack icon): Show/Hide, Undo, Connect/Disconnect Codex and Claude Code activity, storage recovery, Quit.
+- **Menu bar** (stack icon): Show/Hide, Undo, ✓ Codex activity / ✓ Claude Code activity, storage recovery, Quit.
 
 ## Agent status
 The glass gets a glowing colored outline (no fill, no animation), readable on light and dark desktops:
@@ -39,14 +39,14 @@ The glass gets a glowing colored outline (no fill, no animation), readable on li
 | Green | A turn finished — hover to acknowledge |
 | None, sleepy face | No status yet |
 
-All sessions of both agents combine into one status. A new prompt clears old red/green.
+All sessions of both agents combine into one status: yellow > blue > red > green > idle. A session that has started but done nothing yet never hides another session's result. A new prompt clears old red/green.
 
 - **Claude Code** (all sessions on this Mac, main agent only): prompt/tools → blue; permission prompt or AskUserQuestion → yellow; `Stop` → green; `StopFailure` → red; an idle prompt after Esc → neutral; `SessionEnd` clears active work.
 - **Codex** (desktop app sessions): hooks give blue/yellow; green/red come only from the stored turn outcome, read by `CodexTurnMonitor` through `codex app-server` (`thread/turns/list`, items not loaded). It polls every 3 s, then 10 s after 2 min and 30 s after 10 min, and recycles the server every 15 min.
 - **No stuck colors from dead sessions:** each event records the agent process that ran the hook. Every 30 s, active sessions whose agent process has exited are removed.
 - **Privacy:** hooks forward only event name, session/turn IDs, time and owner PID. They never approve, deny or alter agent work.
 
-**Connect:** menu bar → Connect Codex / Claude Code activity, or:
+**Connect:** tick **Codex activity** or **Claude Code activity** in the menu bar (untick to disconnect). Unticking one agent drops only its sessions and immediately ignores it, including sessions still open; the other agent's status is kept. Or from a shell:
 ```sh
 ~/Applications/Delay\ No\ More.app/Contents/MacOS/DelayNoMore --install-hooks claude   # ~/.claude/settings.json
 ~/Applications/Delay\ No\ More.app/Contents/MacOS/DelayNoMore --install-hooks codex    # ~/.codex/hooks.json

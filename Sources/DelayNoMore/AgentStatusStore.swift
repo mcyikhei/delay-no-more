@@ -87,10 +87,18 @@ final class AgentStatusStore: ObservableObject {
     private var previewTask: Task<Void, Never>?
     private var livenessTask: Task<Void, Never>?
     private let log = StatusLog()
+    /// Agents whose hooks are installed. Events from any other agent, such as
+    /// a still-open session after disconnecting, are ignored.
+    private(set) var connected: Set<AgentKind> = []
+
+    private static func installedAgents() -> Set<AgentKind> {
+        Set(AgentKind.allCases.filter(AgentHookBridge.isInstalled))
+    }
 
     func start() {
         stop()
-        guard AgentHookBridge.anyInstalled else { return }
+        connected = Self.installedAgents()
+        guard !connected.isEmpty else { return }
         do {
             let generation = self.generation
             let log = self.log
@@ -117,7 +125,23 @@ final class AgentStatusStore: ObservableObject {
         }
     }
 
+    /// Call after connecting or disconnecting an agent. Starts or stops
+    /// observation as needed and keeps the remaining agents' status.
+    func updateConnections() {
+        let installed = Self.installedAgents()
+        let removed = connected.subtracting(installed)
+        if installed.isEmpty { stop(); return }
+        if listener == nil { start(); return }
+        connected = installed
+        for agent in removed {
+            reducer.forget(agent: agent)
+            log.note("\(agent.rawValue) disconnected; its sessions were dropped")
+        }
+        afterReduce()
+    }
+
     private func receive(_ event: AgentEvent) {
+        if event.event != "Preview", !connected.contains(event.agent) { return }
         if event.event == "Preview" {
             preview.apply(event)
             log.record(event, note: "preview \(event.status ?? "-")")
@@ -203,6 +227,7 @@ final class AgentStatusStore: ObservableObject {
         livenessTask?.cancel(); livenessTask = nil
         listener?.stop(); listener = nil
         preview = AgentStatusPreview()
+        connected = []
         reducer.disconnect(); publish()
     }
 }

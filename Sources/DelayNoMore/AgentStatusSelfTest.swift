@@ -406,6 +406,29 @@ enum AgentStatusSelfTest {
         sync.receive(codex("thread", "TurnCompleted", "known", 2, status: "completed"), at: at(2))
         check(sync.activeCodexTurns().isEmpty, "a completed turn stops being observed")
 
+        // A started-but-silent session carries no evidence.
+        var silent = AgentStatusReducer()
+        silent.receive(claude("done", "UserPromptSubmit"), at: now)
+        silent.receive(claude("done", "Stop", 1), at: at(1))
+        silent.receive(codex("fresh", "SessionStart", nil, 2), at: at(2))
+        check(silent.snapshot.activity == .finished, "an empty new session cannot hide another session's green")
+        silent.acknowledgeCompletion(at: at(3))
+        check(silent.snapshot.activity == .idle, "an empty new session cannot turn an idle tube sleepy")
+        var onlySilent = AgentStatusReducer()
+        onlySilent.receive(codex("fresh", "SessionStart", nil), at: now)
+        check(onlySilent.snapshot.activity == .unknown, "with only silent sessions the tube stays sleepy")
+
+        // Disconnecting one agent keeps the other's status.
+        var both = AgentStatusReducer()
+        both.receive(codex("x", "TurnStarted"), at: now)
+        both.receive(claude("y", "UserPromptSubmit"), at: now)
+        both.receive(claude("y", "PermissionRequest", 1), at: at(1))
+        both.forget(agent: .claude, at: at(2))
+        check(both.snapshot.activity == .working && both.snapshot.activeCount == 1,
+              "forgetting Claude keeps Codex work and drops Claude's yellow")
+        both.forget(agent: .codex, at: at(3))
+        check(both.snapshot.activity == .unknown, "forgetting every agent leaves no status")
+
         // Liveness.
         var owned = AgentStatusReducer()
         owned.receive(claude("dead", "UserPromptSubmit", pid: 111), at: now)

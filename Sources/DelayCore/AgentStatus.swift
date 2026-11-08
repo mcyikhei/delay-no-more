@@ -158,6 +158,13 @@ public struct AgentStatusReducer: Sendable {
         return true
     }
 
+    /// Drops one agent's sessions when it is disconnected; other agents keep
+    /// their status.
+    public mutating func forget(agent: AgentKind, at now: Date = Date()) {
+        sessions = sessions.filter { $0.value.agent != agent }
+        refresh(at: now)
+    }
+
     public mutating func disconnect() {
         sessions = [:]; seen = []; snapshot = AgentStatusSnapshot()
     }
@@ -257,13 +264,14 @@ public struct AgentStatusReducer: Sendable {
 
     public mutating func refresh(at now: Date = Date()) {
         let active = sessions.values.filter { $0.activity == .working || $0.activity == .waiting }
-        let unknown = sessions.values.contains { $0.activity == .unknown }
         snapshot.activeCount = active.count
         if active.contains(where: { $0.activity == .waiting }) { snapshot.activity = .waiting }
         else if !active.isEmpty { snapshot.activity = .working }
         else if sessions.values.contains(where: { $0.activity == .failed }) { snapshot.activity = .failed }
-        else if unknown || sessions.isEmpty { snapshot.activity = .unknown }
         else if sessions.values.contains(where: { $0.activity == .finished }) { snapshot.activity = .finished }
+        // A session that has started but done nothing yet carries no evidence;
+        // it must not hide another session's outcome or idle state.
+        else if sessions.isEmpty || !sessions.values.contains(where: { $0.activity != .unknown }) { snapshot.activity = .unknown }
         else { snapshot.activity = .idle }
         if snapshot.activity != .idle { clearCue() }
         if let date = snapshot.cueDate, now.timeIntervalSince(date) >= 3 { clearCue() }

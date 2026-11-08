@@ -126,16 +126,13 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
         undo.target = self
         menu.addItem(undo)
         menu.addItem(.separator())
+        // Ticked = this agent's hooks are installed and its status is shown.
         for agent in AgentKind.allCases {
-            let name = AgentHookBridge.displayName(agent)
-            let connect = NSMenuItem(title: "Connect \(name) activity…", action: #selector(connectAgent(_:)), keyEquivalent: "")
-            connect.target = self
-            connect.representedObject = agent.rawValue
-            menu.addItem(connect)
-            let disconnect = NSMenuItem(title: "Disconnect \(name) activity", action: #selector(disconnectAgent(_:)), keyEquivalent: "")
-            disconnect.target = self
-            disconnect.representedObject = agent.rawValue
-            menu.addItem(disconnect)
+            let item = NSMenuItem(title: "\(AgentHookBridge.displayName(agent)) activity",
+                                  action: #selector(toggleAgent(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = agent.rawValue
+            menu.addItem(item)
         }
         menu.addItem(.separator())
         let storageError = NSMenuItem(title: "Storage problem…", action: #selector(showStorageError), keyEquivalent: "")
@@ -188,11 +185,19 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
         (item.representedObject as? String).flatMap(AgentKind.init(rawValue:))
     }
 
-    @objc private func connectAgent(_ sender: NSMenuItem) {
-        guard let agent = agent(of: sender), let executable = Bundle.main.executableURL else { return }
+    @objc private func toggleAgent(_ sender: NSMenuItem) {
+        guard let agent = agent(of: sender) else { return }
+        if AgentHookBridge.isInstalled(agent) {
+            do {
+                try AgentHookBridge.uninstall(agent)
+                agentStatus.updateConnections()
+            } catch { showConnectionError(error) }
+            return
+        }
+        guard let executable = Bundle.main.executableURL else { return }
         do {
             try AgentHookBridge.install(agent, executable: executable)
-            agentStatus.start()
+            agentStatus.updateConnections()
             let alert = NSAlert()
             alert.messageText = "Review the \(AgentHookBridge.displayName(agent)) connection"
             alert.informativeText = agent == .codex
@@ -201,15 +206,6 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
             if let error = agentStatus.connectionError { alert.informativeText += "\n\nLocal connection problem: \(error)" }
             alert.addButton(withTitle: "Done")
             alert.runModal()
-        } catch { showConnectionError(error) }
-    }
-
-    @objc private func disconnectAgent(_ sender: NSMenuItem) {
-        guard let agent = agent(of: sender) else { return }
-        do {
-            try AgentHookBridge.uninstall(agent)
-            // Restart observation so the removed agent's sessions are dropped.
-            agentStatus.start()
         } catch { showConnectionError(error) }
     }
 
@@ -244,7 +240,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == #selector(undoTaskRemoval) { return canUndoTaskRemoval }
-        if menuItem.action == #selector(disconnectAgent(_:)) { return agent(of: menuItem).map(AgentHookBridge.isInstalled) ?? false }
+        if menuItem.action == #selector(toggleAgent(_:)) {
+            menuItem.state = agent(of: menuItem).map(AgentHookBridge.isInstalled) == true ? .on : .off
+            return true
+        }
         return true
     }
 }
