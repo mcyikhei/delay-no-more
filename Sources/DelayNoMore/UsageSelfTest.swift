@@ -19,7 +19,7 @@ enum UsageSelfTest {
         check(claude?.agent == .claude && claude?.usedPercent == 42.4
               && claude?.resetsAt == Date(timeIntervalSince1970: soon),
               "Claude usage reads the 5-hour window, not the weekly or context figures")
-        check(AgentUsage.claudeStatusLineText(claude, now: now) == "5h 42%", "Claude status line prints exactly 5h 42%")
+        check(AgentUsage.claudeStatusLineText(claude, now: now) == "5h 58% left", "Claude status line prints what is left: 5h 58% left")
         check(AgentUsage.fromClaudeStatusLine(["model": ["id": "x"]]) == nil
               && AgentUsage.claudeStatusLineText(nil) == "",
               "without rate limits the status line has no usage and prints nothing")
@@ -44,11 +44,12 @@ enum UsageSelfTest {
         } else { check(false, "Codex usage projection") }
 
         // Fill level.
-        check(AgentUsage(agent: .codex, usedPercent: 50, resetsAt: nil).fillFraction() == 0.5, "50% usage fills half the tube")
-        check(AgentUsage(agent: .codex, usedPercent: 130, resetsAt: nil).fillFraction() == 1, "usage over 100% fills the tube, no more")
+        check(AgentUsage(agent: .codex, usedPercent: 0, resetsAt: nil).fillFraction() == 1, "nothing used: the tube is full")
+        check(AgentUsage(agent: .codex, usedPercent: 25, resetsAt: nil).fillFraction() == 0.75, "25% used leaves the tube three-quarters full")
+        check(AgentUsage(agent: .codex, usedPercent: 130, resetsAt: nil).fillFraction() == 0, "a used-up limit leaves the tube empty")
         let expired = AgentUsage(agent: .claude, usedPercent: 80, resetsAt: now.addingTimeInterval(-1))
-        check(expired.fillFraction(at: now) == 0 && expired.displayPercent(at: now) == 0,
-              "after the window resets the tube is empty")
+        check(expired.fillFraction(at: now) == 1 && expired.remainingPercent(at: now) == 100,
+              "after the window resets the tube is full again")
 
         // Usage events never touch agent status.
         var reducer = AgentStatusReducer()
@@ -71,12 +72,12 @@ enum UsageSelfTest {
         store.receive(AgentUsage(agent: .claude, usedPercent: 60, resetsAt: Date(timeIntervalSince1970: soon)))
         check(store.fraction == 0, "readings for an unselected agent don't fill the tube")
         store.select(.claude)
-        check(store.fraction == 0.6 && store.summary.hasPrefix("60% used"), "selecting Claude shows its last reading at once")
+        check(store.fraction == 0.4 && store.summary.hasPrefix("40% left"), "selecting Claude shows what is left at once")
         store.select(.off)
         check(store.fraction == 0 && store.summary.isEmpty, "Off empties the tube")
         store.select(.claude)
         let reopened = AgentUsageStore(defaults: defaults, requestCodex: { $0(nil) })
-        check(reopened.source == .claude && reopened.fraction == 0.6, "selection and last reading survive a restart")
+        check(reopened.source == .claude && reopened.fraction == 0.4, "selection and last reading survive a restart")
         reopened.select(.codex)
         check(reopened.summary == "Waiting for usage…", "a source without a reading says it is waiting")
 

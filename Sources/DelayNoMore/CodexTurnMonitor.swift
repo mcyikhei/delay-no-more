@@ -139,7 +139,7 @@ final class CodexTurnMonitor: @unchecked Sendable {
             input = incoming.fileHandleForWriting
             output = handle
             write(["id": 1, "method": "initialize", "params": [
-                "clientInfo": ["name": "delay_no_more_status", "version": "1.10.0"],
+                "clientInfo": ["name": "delay_no_more_status", "version": "1.10.1"],
                 "capabilities": ["experimentalApi": true]
             ]])
             if timer == nil {

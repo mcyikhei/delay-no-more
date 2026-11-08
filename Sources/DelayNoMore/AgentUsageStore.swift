@@ -9,7 +9,7 @@ import Foundation
 final class AgentUsageStore: ObservableObject {
     @Published private(set) var source: UsageSource
     @Published private(set) var usage: AgentUsage?
-    /// 0 … 1 water level for the selected source.
+    /// 0 … 1 water level (what is left) for the selected source.
     @Published private(set) var fraction: Double = 0
 
     private let defaults: UserDefaults
@@ -84,7 +84,7 @@ final class AgentUsageStore: ObservableObject {
         if usage != current { usage = current }
         let level = current?.fillFraction() ?? 0
         if fraction != level { fraction = level }
-        // Drain the water when the window resets; no periodic timer.
+        // Refill the water when the window resets; no periodic timer.
         resetTask?.cancel(); resetTask = nil
         if let reset = current?.resetsAt, reset > Date() {
             resetTask = Task { [weak self] in
@@ -95,11 +95,11 @@ final class AgentUsageStore: ObservableObject {
         }
     }
 
-    /// Menu text, e.g. `42% used · resets 14:30`.
+    /// Menu text, e.g. `58% left · resets 14:30`.
     var summary: String {
         guard source != .off else { return "" }
         guard let usage else { return "Waiting for usage…" }
-        var text = "\(usage.displayPercent())% used"
+        var text = "\(usage.remainingPercent())% left"
         if let reset = usage.resetsAt, reset > Date() {
             let format: Date.FormatStyle = reset.timeIntervalSinceNow > 20 * 3600
                 ? .dateTime.weekday(.abbreviated).hour().minute()
@@ -111,6 +111,6 @@ final class AgentUsageStore: ObservableObject {
 
     var accessibilityDescription: String? {
         guard let agent = source.agent, let usage else { return nil }
-        return "\(AgentHookBridge.displayName(agent)) \(AgentUsage.windowName(for: agent)) usage \(usage.displayPercent())%"
+        return "\(AgentHookBridge.displayName(agent)) \(AgentUsage.windowName(for: agent)) usage, \(usage.remainingPercent())% left"
     }
 }

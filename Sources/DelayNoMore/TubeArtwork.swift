@@ -30,7 +30,7 @@ private struct GlowOutline<S: Shape>: View {
     }
 }
 
-/// Usage shown as still water inside the glass, rising from the base. Drawn
+/// What is left of a usage limit, shown as still water rising from the base. Drawn
 /// behind the cards and face; it changes only when the reading changes.
 struct TubeWater: View {
     let fraction: Double
@@ -42,9 +42,9 @@ struct TubeWater: View {
             let height = max(0, geometry.size.height - top - 8)
             let level = height * CGFloat(min(1, max(0, fraction)))
             Rectangle()
-                .fill(LinearGradient(colors: [StackTheme.water.opacity(0.30), StackTheme.water.opacity(0.48)],
+                .fill(LinearGradient(colors: [StackTheme.water.opacity(0.12), StackTheme.water.opacity(0.26)],
                                      startPoint: .top, endPoint: .bottom))
-                .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.6)).frame(height: 1) }
+                .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.45)).frame(height: 0.75) }
                 .frame(height: level)
                 .frame(width: width, height: height, alignment: .bottom)
                 .clipShape(VesselShape())

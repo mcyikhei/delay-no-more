@@ -37,7 +37,7 @@ enum DelayNoMoreMain {
             monitor.stop()
             guard let result else { print("No Codex weekly usage available."); exit(1) }
             let reset = result.resetsAt.map { " · resets \($0.formatted(.dateTime.weekday(.abbreviated).hour().minute()))" } ?? ""
-            print("Codex weekly usage: \(result.displayPercent())%\(reset) (water \(Int(result.fillFraction() * 100))% full)")
+            print("Codex weekly usage: \(result.remainingPercent())% left\(reset)")
             exit(0)
         }
         if arguments.contains("--codex-monitor-check") {

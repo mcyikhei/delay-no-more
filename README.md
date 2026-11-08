@@ -1,6 +1,6 @@
 # Delay No More
 
-A small transparent glass tube on the Mac desktop that holds your to-do cards and shows what your coding agents (Codex and Claude Code) are doing. Native SwiftUI + AppKit, arm64, macOS 13+, no network, no Dock icon. Current version: 1.10.0.
+A small transparent glass tube on the Mac desktop that holds your to-do cards and shows what your coding agents (Codex and Claude Code) are doing. Native SwiftUI + AppKit, arm64, macOS 13+, no network, no Dock icon. Current version: 1.10.1.
 
 ```
 Package.swift
@@ -54,15 +54,15 @@ All sessions of both agents combine into one status: yellow > blue > red > green
 Both keep all other settings and save a `*.delay-no-more.<uuid>.backup.json` before the first change. Codex needs the hooks trusted in Settings > Hooks. Claude Code loads hooks when a session starts (review with `/hooks`). Moving the app means reinstalling. `--remove-hooks <agent>` removes only this app's handlers.
 
 ## Usage water
-The tube fills with still aqua water to show how much of an agent's usage limit is used: empty = 0%, half = 50%, full = 100%. Cards float in front of it. Choose the source in the menu bar under **Water level**:
+The tube holds still, clear blue water showing how much of an agent's usage limit is **left**: full = nothing used, half = half left, empty = used up. It refills when the limit resets. Cards float in front of it. Choose the source in the menu bar under **Water level**:
 
 | Choice | Limit shown | Where the number comes from |
 |---|---|---|
 | Off | — | — |
 | Codex weekly usage | Codex weekly window | `codex app-server` `account/rateLimits/read`, read when selected, every 5 min, and after each Codex turn. Codex answers with its own login; Delay No More makes no network calls. |
-| Claude Code 5-hour usage | Claude Code 5-hour window | Claude Code's status line. Selecting it installs a status line in `~/.claude/settings.json` that shows `5h 42%` and forwards the number to the tube; choosing another option removes it. It never replaces a status line you already have. Updates whenever a Claude Code session refreshes its status line. |
+| Claude Code 5-hour usage | Claude Code 5-hour window | Claude Code's status line. Selecting it installs a status line in `~/.claude/settings.json` that shows `5h 58% left` and forwards the number to the tube; choosing another option removes it. It never replaces a status line you already have. Updates whenever a Claude Code session refreshes its status line. |
 
-The menu line under the choices shows e.g. `42% used · resets 14:30`. The last reading per agent is remembered across restarts, and the water drains to empty when the window resets. Only the percent and reset time are kept — no account, plan or credit data. Check Codex from a shell with `--usage-check`.
+The menu line under the choices shows e.g. `58% left · resets 14:30`. The last reading per agent is remembered across restarts, and the water refills when the window resets. Only the percent and reset time are kept — no account, plan or credit data. Check Codex from a shell with `--usage-check`.
 
 **Visual test without touching real status:**
 ```sh

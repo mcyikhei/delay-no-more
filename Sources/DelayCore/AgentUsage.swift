@@ -33,17 +33,17 @@ public struct AgentUsage: Codable, Equatable, Sendable {
         self.resetsAt = resetsAt; self.observedAt = observedAt
     }
 
-    /// 0 … 1 water level. A window whose reset time has passed is empty.
+    /// 0 … 1 water level showing what is LEFT: full when nothing is used,
+    /// empty when the limit is used up, full again once the window resets.
     public func fillFraction(at now: Date = Date()) -> Double {
-        if let resetsAt, resetsAt <= now { return 0 }
+        if let resetsAt, resetsAt <= now { return 1 }
         guard usedPercent.isFinite else { return 0 }
-        return min(1, max(0, usedPercent / 100))
+        return min(1, max(0, 1 - usedPercent / 100))
     }
 
-    /// Percent shown in text, 0 after the window resets.
-    public func displayPercent(at now: Date = Date()) -> Int {
-        if let resetsAt, resetsAt <= now { return 0 }
-        return Int(max(0, usedPercent).rounded())
+    /// Percent of the limit left, shown in text; 100 after the window resets.
+    public func remainingPercent(at now: Date = Date()) -> Int {
+        Int((fillFraction(at: now) * 100).rounded())
     }
 
     /// Claude Code status-line input: only `rate_limits.five_hour` is read.
@@ -69,10 +69,10 @@ public struct AgentUsage: Codable, Equatable, Sendable {
         return nil
     }
 
-    /// The Claude Code status-line text, e.g. `5h 42%`.
+    /// The Claude Code status-line text, e.g. `5h 58% left`.
     public static func claudeStatusLineText(_ usage: AgentUsage?, now: Date = Date()) -> String {
         guard let usage else { return "" }
-        return "5h \(usage.displayPercent(at: now))%"
+        return "5h \(usage.remainingPercent(at: now))% left"
     }
 
     private static func number(_ value: Any?) -> Double? {
