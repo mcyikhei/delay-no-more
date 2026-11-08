@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Swift Package Manager / Xcode
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+
+# Packaged app and archives (scripts/package.sh)
+dist/
+*.zip
+
+# Pre-repository location of the running app; delete after moving the hooks
+# to ~/Applications (see README "Install").
+/outputs/
