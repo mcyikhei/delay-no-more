@@ -101,6 +101,7 @@ final class StackWindowController: NSObject, NSWindowDelegate {
     private let store: TaskStore
     private let interaction: AppInteraction
     private let agentStatus: AgentStatusStore
+    private let usage: AgentUsageStore
     private let panel: StackPanel
     private let stackHostingView: ClearHostingView<StackView>
     private let expandedContainer = HoverContainerView()
@@ -119,11 +120,12 @@ final class StackWindowController: NSObject, NSWindowDelegate {
     private var isExplicitlyHidden = false
     private var chosenScreenID: UInt32?
 
-    init(store: TaskStore, interaction: AppInteraction, agentStatus: AgentStatusStore) {
+    init(store: TaskStore, interaction: AppInteraction, agentStatus: AgentStatusStore, usage: AgentUsageStore) {
         self.store = store
         self.interaction = interaction
         self.agentStatus = agentStatus
-        stackHostingView = ClearHostingView(rootView: StackView(store: store, interaction: interaction, agentStatus: agentStatus))
+        self.usage = usage
+        stackHostingView = ClearHostingView(rootView: StackView(store: store, interaction: interaction, agentStatus: agentStatus, usage: usage))
         panel = StackPanel(contentRect: TubeMetrics.uprightPanelFrame(for: expandedFrame),
                            styleMask: [.borderless, .nonactivatingPanel],
                            backing: .buffered, defer: false)
@@ -195,7 +197,7 @@ final class StackWindowController: NSObject, NSWindowDelegate {
             if let presentation = self.tuckedHitView.presentation {
                 self.tuckedHostingView?.rootView = TuckedTubeView(presentation: presentation, tasks: document.tasks,
                                                                agentStatus: self.agentStatus,
-                                                               interaction: self.interaction)
+                                                               interaction: self.interaction, usage: self.usage)
             }
             self.writeDiagnostics(taskCount: document.tasks.count)
         }.store(in: &subscriptions)
@@ -464,7 +466,7 @@ final class StackWindowController: NSObject, NSWindowDelegate {
 
     private func renderDockPresentation(_ presentation: TubeDockPresentation, frame: CGRect? = nil) {
         let preview = TuckedTubeView(presentation: presentation, tasks: store.tasks,
-                                    agentStatus: agentStatus, interaction: interaction)
+                                    agentStatus: agentStatus, interaction: interaction, usage: usage)
         tuckedHitView.presentation = presentation
         if let tuckedHostingView {
             tuckedHostingView.rootView = preview

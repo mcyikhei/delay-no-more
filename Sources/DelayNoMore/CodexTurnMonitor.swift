@@ -17,6 +17,11 @@ final class CodexTurnMonitor: @unchecked Sendable {
     private var buffer = Data()
     private var tracked: [String: Tracked] = [:]
     private var requests: [Int: (String, String)] = [:]
+    typealias UsageCompletion = @Sendable (AgentUsage?) -> Void
+    /// Usage reads waiting for the server to be ready, and reads in flight.
+    private var pendingUsage: [UsageCompletion] = []
+    private var usageRequests: [Int: UsageCompletion] = [:]
+    private var hasUsageWork: Bool { !pendingUsage.isEmpty || !usageRequests.isEmpty }
     private var serial = 1
     private var ready = false
     private var lastResponse = Date()
@@ -67,6 +72,32 @@ final class CodexTurnMonitor: @unchecked Sendable {
         }
     }
 
+    /// Reads the weekly usage window once. The server is launched if needed and
+    /// stops again afterwards unless turns are being observed.
+    func requestRateLimits(completion: @escaping UsageCompletion) {
+        queue.async { [weak self] in
+            guard let self else { completion(nil); return }
+            self.pendingUsage.append(completion)
+            if self.process == nil { self.launch() } else if self.ready { self.flushUsage() }
+        }
+    }
+
+    private func flushUsage() {
+        let waiting = pendingUsage
+        pendingUsage = []
+        for completion in waiting {
+            serial += 1
+            usageRequests[serial] = completion
+            write(["id": serial, "method": "account/rateLimits/read"])
+        }
+    }
+
+    private func failUsage() {
+        let all = pendingUsage + Array(usageRequests.values)
+        pendingUsage = []; usageRequests = [:]
+        for completion in all { completion(nil) }
+    }
+
     /// 3 s for the first two minutes, then 10 s, then 30 s.
     static func pollInterval(age: TimeInterval) -> TimeInterval {
         age < 120 ? 3 : age < 600 ? 10 : 30
@@ -85,7 +116,7 @@ final class CodexTurnMonitor: @unchecked Sendable {
             "/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin/codex",
             "/Applications/Codex.app/Contents/Resources/codex"
         ]
-        guard let executable = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { return }
+        guard let executable = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { failUsage(); return }
         let process = Process()
         let incoming = Pipe(), outgoing = Pipe()
         process.executableURL = URL(fileURLWithPath: executable)
@@ -108,7 +139,7 @@ final class CodexTurnMonitor: @unchecked Sendable {
             input = incoming.fileHandleForWriting
             output = handle
             write(["id": 1, "method": "initialize", "params": [
-                "clientInfo": ["name": "delay_no_more_status", "version": "1.9.1"],
+                "clientInfo": ["name": "delay_no_more_status", "version": "1.10.0"],
                 "capabilities": ["experimentalApi": true]
             ]])
             if timer == nil {
@@ -118,20 +149,20 @@ final class CodexTurnMonitor: @unchecked Sendable {
                 self.timer = timer
                 timer.resume()
             }
-        } catch { handle.readabilityHandler = nil }
+        } catch { handle.readabilityHandler = nil; failUsage() }
     }
 
     private func poll() {
-        guard !tracked.isEmpty else { shutdown(); timer?.cancel(); timer = nil; return }
+        guard !tracked.isEmpty || hasUsageWork else { shutdown(); timer?.cancel(); timer = nil; return }
         guard process?.isRunning == true else { shutdown(); if !tracked.isEmpty { launch() }; return }
-        if (!ready || !requests.isEmpty) && Date().timeIntervalSince(lastResponse) > 10 {
+        if (!ready || !requests.isEmpty || !usageRequests.isEmpty) && Date().timeIntervalSince(lastResponse) > 10 {
             shutdown()
             return
         }
         guard ready else { return }
         let now = Date()
         // The app-server's memory grows while it serves queries; recycle it.
-        if requests.isEmpty, now.timeIntervalSince(launchedAt) > 900 { shutdown(); return }
+        if requests.isEmpty, !hasUsageWork, now.timeIntervalSince(launchedAt) > 900 { shutdown(); return }
         // Bounded observation: at most 24 hours per observed turn. Timeout has no outcome.
         for session in Array(tracked.keys) {
             guard var value = tracked[session] else { continue }
@@ -168,6 +199,12 @@ final class CodexTurnMonitor: @unchecked Sendable {
                 guard message["result"] != nil else { shutdown(); return }
                 ready = true
                 write(["method": "initialized"])
+                flushUsage()
+                continue
+            }
+            if let completion = usageRequests.removeValue(forKey: id) {
+                // Only the weekly window's percent and reset time are kept.
+                completion((message["result"] as? [String: Any]).flatMap { AgentUsage.fromCodexRateLimits($0) })
                 continue
             }
             guard let (session, turn) = requests.removeValue(forKey: id), tracked[session]?.turn == turn else { continue }
@@ -197,6 +234,7 @@ final class CodexTurnMonitor: @unchecked Sendable {
         output = nil; input = nil
         if process?.isRunning == true { process?.terminate() }; process = nil
         ready = false; buffer = Data(); requests = [:]
+        failUsage()
     }
     deinit { timer?.cancel(); shutdown() }
 }

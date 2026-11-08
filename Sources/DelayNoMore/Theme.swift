@@ -16,6 +16,7 @@ enum StackTheme {
     static let codexFailed = Color(hex: 0xF07474)
     static let codexWaiting = Color(hex: 0xF3D25C)
     static let codexFinished = Color(hex: 0x75D8AB)
+    static let water = Color(hex: 0x4CC9E0)
     static let cardRadius: CGFloat = 8
 
     static func cardFill(_ color: CardColor) -> Color {

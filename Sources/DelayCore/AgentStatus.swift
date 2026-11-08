@@ -51,20 +51,36 @@ public struct AgentEvent: Codable, Equatable, Sendable {
     public let pid: Int32?
     /// Preview length in seconds; only meaningful for `Preview`.
     public let duration: Double?
+    /// Usage-limit percent and reset time; only meaningful for `Usage`.
+    public let usedPercent: Double?
+    public let resetsAt: Double?
 
     public static let previewStates = ["working", "waiting", "failed", "finished", "clear"]
 
     private enum CodingKeys: String, CodingKey {
-        case schema, agent, eventID, sessionID, turnID, event, time, status, pid, duration
+        case schema, agent, eventID, sessionID, turnID, event, time, status, pid, duration, usedPercent, resetsAt
     }
 
     public init(schema: Int = 2, agent: AgentKind = .codex, eventID: String = UUID().uuidString,
                 sessionID: String, turnID: String? = nil, event: String,
                 time: Double = Date().timeIntervalSince1970, status: String? = nil,
-                pid: Int32? = nil, duration: Double? = nil) {
+                pid: Int32? = nil, duration: Double? = nil, usedPercent: Double? = nil, resetsAt: Double? = nil) {
         self.schema = schema; self.agent = agent; self.eventID = eventID; self.sessionID = sessionID
         self.turnID = turnID; self.event = event; self.time = time; self.status = status
-        self.pid = pid; self.duration = duration
+        self.pid = pid; self.duration = duration; self.usedPercent = usedPercent; self.resetsAt = resetsAt
+    }
+
+    /// A usage reading from an agent, carried on the same local socket.
+    public static func usage(_ usage: AgentUsage, now: Date = Date()) -> AgentEvent {
+        AgentEvent(agent: usage.agent, sessionID: "usage", event: "Usage", time: now.timeIntervalSince1970,
+                   usedPercent: usage.usedPercent, resetsAt: usage.resetsAt?.timeIntervalSince1970)
+    }
+
+    public var usageReading: AgentUsage? {
+        guard event == "Usage", let usedPercent else { return nil }
+        return AgentUsage(agent: agent, usedPercent: usedPercent,
+                          resetsAt: resetsAt.map(Date.init(timeIntervalSince1970:)),
+                          observedAt: Date(timeIntervalSince1970: time))
     }
 
     public init(from decoder: Decoder) throws {
@@ -80,6 +96,8 @@ public struct AgentEvent: Codable, Equatable, Sendable {
         status = try values.decodeIfPresent(String.self, forKey: .status)
         pid = try values.decodeIfPresent(Int32.self, forKey: .pid)
         duration = try values.decodeIfPresent(Double.self, forKey: .duration)
+        usedPercent = try values.decodeIfPresent(Double.self, forKey: .usedPercent)
+        resetsAt = try values.decodeIfPresent(Double.self, forKey: .resetsAt)
     }
 
     var sessionKey: String { agent.rawValue + ":" + sessionID }
@@ -88,12 +106,16 @@ public struct AgentEvent: Codable, Equatable, Sendable {
         let allowed = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Interrupt",
                        "SessionEnd", "PermissionRequest", "PreModelRequest", "DecisionRequest",
                        "DecisionRequestAsync", "TurnStarted", "TurnCompleted", "ThreadStatus",
-                       "StopFailure", "IdlePrompt", "Preview"]
+                       "StopFailure", "IdlePrompt", "Preview", "Usage"]
         let statuses = ["completed", "failed", "interrupted", "working", "waiting", "idle", "unknown"]
         guard (schema == 1 || schema == 2), !eventID.isEmpty, eventID.utf8.count <= 128,
               !sessionID.isEmpty, sessionID.utf8.count <= 256,
               (turnID?.utf8.count ?? 0) <= 256, allowed.contains(event),
               (pid ?? 1) > 0, time.isFinite, abs(now.timeIntervalSince1970 - time) <= 30 else { return false }
+        if event == "Usage" {
+            guard let usedPercent, usedPercent.isFinite, usedPercent >= 0, usedPercent <= 1000 else { return false }
+            return resetsAt.map(\.isFinite) ?? true
+        }
         if event == "Preview" {
             guard let status, Self.previewStates.contains(status) else { return false }
             if status == "clear" { return true }
@@ -170,7 +192,8 @@ public struct AgentStatusReducer: Sendable {
     }
 
     public mutating func receive(_ event: AgentEvent, at now: Date = Date()) {
-        guard event.isValid(at: now), event.event != "Preview", !seen.contains(event.eventID) else { return }
+        guard event.isValid(at: now), event.event != "Preview", event.event != "Usage",
+              !seen.contains(event.eventID) else { return }
         let key = event.sessionKey
         let claude = event.agent == .claude
         if event.event == "TurnCompleted" {

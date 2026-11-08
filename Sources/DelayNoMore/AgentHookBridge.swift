@@ -107,6 +107,56 @@ enum AgentHookBridge {
         return true
     }
 
+    // MARK: Claude Code status line (usage source)
+
+    static let statusLineMarker = "--delay-no-more-statusline-v1"
+
+    /// Runs as Claude Code's status-line command: forwards the 5-hour usage
+    /// to the tube and prints `5h 42%`. Reads nothing else from the input.
+    static func runClaudeStatusLine() -> Int32 {
+        guard let input = readInput(),
+              let json = try? JSONSerialization.jsonObject(with: input) as? [String: Any] else { return 0 }
+        let usage = AgentUsage.fromClaudeStatusLine(json)
+        if let usage, let payload = try? JSONEncoder().encode(AgentEvent.usage(usage)) {
+            send(payload, to: socketURL)
+        }
+        let text = AgentUsage.claudeStatusLineText(usage)
+        if !text.isEmpty { print(text) }
+        return 0
+    }
+
+    enum StatusLineOwner { case none, delayNoMore, other }
+
+    static func statusLineOwner(configURL url: URL? = nil) -> StatusLineOwner {
+        let url = url ?? configURL(for: .claude)
+        guard let root = try? readConfiguration(url), let value = root["statusLine"] else { return .none }
+        guard let line = value as? [String: Any], let command = line["command"] as? String,
+              command.hasSuffix(" --claude-statusline " + statusLineMarker) else { return .other }
+        return .delayNoMore
+    }
+
+    /// Installs the status line unless the user already has their own.
+    static func installStatusLine(executable: URL, configURL url: URL? = nil) throws {
+        let url = url ?? configURL(for: .claude)
+        if statusLineOwner(configURL: url) == .other {
+            throw NSError(domain: "Agent connection", code: 4, userInfo: [NSLocalizedDescriptionKey:
+                "Claude Code already has its own status line. Delay No More won't replace it, so it can't read Claude Code usage."])
+        }
+        var root = try readConfiguration(url)
+        let quoted = "'" + executable.path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        root["statusLine"] = ["type": "command", "command": quoted + " --claude-statusline " + statusLineMarker, "padding": 0] as [String: Any]
+        try writeConfiguration(root, to: url)
+    }
+
+    /// Removes only Delay No More's status line.
+    static func uninstallStatusLine(configURL url: URL? = nil) throws {
+        let url = url ?? configURL(for: .claude)
+        guard statusLineOwner(configURL: url) == .delayNoMore else { return }
+        var root = try readConfiguration(url)
+        root.removeValue(forKey: "statusLine")
+        try writeConfiguration(root, to: url)
+    }
+
     // MARK: Process ancestry
 
     private static func executablePath(_ pid: pid_t) -> String? {

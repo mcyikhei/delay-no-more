@@ -90,6 +90,10 @@ final class AgentStatusStore: ObservableObject {
     /// Agents whose hooks are installed. Events from any other agent, such as
     /// a still-open session after disconnecting, are ignored.
     private(set) var connected: Set<AgentKind> = []
+    /// Keep the socket open for usage readings even with no agent connected.
+    private(set) var listensForUsage = false
+    var onUsage: ((AgentUsage) -> Void)?
+    var onCodexTurnCompleted: (() -> Void)?
 
     private static func installedAgents() -> Set<AgentKind> {
         Set(AgentKind.allCases.filter(AgentHookBridge.isInstalled))
@@ -98,7 +102,7 @@ final class AgentStatusStore: ObservableObject {
     func start() {
         stop()
         connected = Self.installedAgents()
-        guard !connected.isEmpty else { return }
+        guard !connected.isEmpty || listensForUsage else { return }
         do {
             let generation = self.generation
             let log = self.log
@@ -130,7 +134,7 @@ final class AgentStatusStore: ObservableObject {
     func updateConnections() {
         let installed = Self.installedAgents()
         let removed = connected.subtracting(installed)
-        if installed.isEmpty { stop(); return }
+        if installed.isEmpty && !listensForUsage { stop(); return }
         if listener == nil { start(); return }
         connected = installed
         for agent in removed {
@@ -140,7 +144,14 @@ final class AgentStatusStore: ObservableObject {
         afterReduce()
     }
 
+    func setListensForUsage(_ listens: Bool) {
+        guard listens != listensForUsage else { return }
+        listensForUsage = listens
+        if listener == nil { if listens { start() } } else { updateConnections() }
+    }
+
     private func receive(_ event: AgentEvent) {
+        if let reading = event.usageReading { onUsage?(reading); return }
         if event.event != "Preview", !connected.contains(event.agent) { return }
         if event.event == "Preview" {
             preview.apply(event)
@@ -155,6 +166,7 @@ final class AgentStatusStore: ObservableObject {
     private func apply(_ event: AgentEvent) {
         let before = reducer.snapshot.activity
         reducer.receive(event)
+        if event.agent == .codex, event.event == "TurnCompleted" { onCodexTurnCompleted?() }
         log.record(event, note: "\(before.rawValue)->\(reducer.snapshot.activity.rawValue)")
         afterReduce()
     }

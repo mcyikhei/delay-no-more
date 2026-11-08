@@ -76,6 +76,7 @@ enum StoreSelfTest {
               "name-only capture preserves existing card identity and color")
 
         AgentStatusSelfTest.run(check: check)
+        UsageSelfTest.run(check: check)
 
         check(TubeMetrics.width <= 224 && TubeMetrics.height + TubeMetrics.draftHeadroom <= 243,
               "upright tube and draft fit within the installed Codex pet's maximum frame")

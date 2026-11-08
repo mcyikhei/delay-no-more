@@ -52,6 +52,7 @@ struct StackView: View {
     @ObservedObject var store: TaskStore
     @ObservedObject var interaction: AppInteraction
     @ObservedObject var agentStatus: AgentStatusStore
+    @ObservedObject var usage: AgentUsageStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var draftName = ""
     @State private var draftError: String?
@@ -160,6 +161,7 @@ struct StackView: View {
     private var tube: some View {
         ZStack {
             TubeBody().allowsHitTesting(false)
+            TubeWater(fraction: usage.fraction)
             TubeRim()
                 .frame(height: TubeMetrics.mouthHeight)
                 .mask(alignment: .top) { Rectangle().frame(height: TubeMetrics.mouthHeight / 2) }
@@ -189,7 +191,8 @@ struct StackView: View {
             .contentShape(Ellipse())
             .onTapGesture(perform: openDraft)
             .accessibilityLabel("Add task to top")
-            .accessibilityValue(agentStatus.snapshot.accessibilityDescription)
+            .accessibilityValue([agentStatus.snapshot.accessibilityDescription, usage.accessibilityDescription]
+                .compactMap { $0 }.joined(separator: ". "))
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { openDraft() }
             .accessibilityHidden(!canActOnCards)

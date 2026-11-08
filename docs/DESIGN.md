@@ -13,6 +13,7 @@ colors:
   codexFailed: "#F07474"
   codexWaiting: "#F3D25C"
   codexFinished: "#75D8AB"
+  water: "#4CC9E0"
 typography:
   body:
     fontFamily: "SF Pro Rounded, system-ui"

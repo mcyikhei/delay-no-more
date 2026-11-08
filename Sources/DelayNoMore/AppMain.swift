@@ -20,9 +20,25 @@ enum DelayNoMoreMain {
         if let agent = agentArgument(after: "--agent-hook") {
             exit(AgentHookBridge.sendFromStandardInput(agent: agent))
         }
+        if arguments.contains("--claude-statusline") {
+            exit(AgentHookBridge.runClaudeStatusLine())
+        }
         if arguments.contains("--codex-hook") {
             // Handlers installed by 1.8.x until they are refreshed.
             exit(AgentHookBridge.sendFromStandardInput(agent: .codex))
+        }
+        if arguments.contains("--usage-check") {
+            // Reads Codex's weekly usage once through the same path as the tube.
+            let done = DispatchSemaphore(value: 0)
+            let monitor = CodexTurnMonitor { _ in }
+            nonisolated(unsafe) var result: AgentUsage?
+            monitor.requestRateLimits { reading in result = reading; done.signal() }
+            _ = done.wait(timeout: .now() + 20)
+            monitor.stop()
+            guard let result else { print("No Codex weekly usage available."); exit(1) }
+            let reset = result.resetsAt.map { " · resets \($0.formatted(.dateTime.weekday(.abbreviated).hour().minute()))" } ?? ""
+            print("Codex weekly usage: \(result.displayPercent())%\(reset) (water \(Int(result.fillFraction() * 100))% full)")
+            exit(0)
         }
         if arguments.contains("--codex-monitor-check") {
             exit(CodexTurnMonitor.runHeadlessCheck())
@@ -84,6 +100,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
     private var storageErrorObservation: AnyCancellable?
     private var agentStatusObservation: AnyCancellable?
     private let agentStatus = AgentStatusStore()
+    private let usage = AgentUsageStore()
+    private var usageObservation: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         installMainMenu()
@@ -91,10 +109,13 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
         taskStore = store
         let interaction = AppInteraction()
         taskInteraction = interaction
-        windowController = StackWindowController(store: store, interaction: interaction, agentStatus: agentStatus)
+        windowController = StackWindowController(store: store, interaction: interaction, agentStatus: agentStatus, usage: usage)
         DistributedNotificationCenter.default().addObserver(self, selector: #selector(showStack),
                                                             name: showStackNotification, object: nil)
         installStatusItem()
+        agentStatus.onUsage = { [weak self] reading in self?.usage.receive(reading) }
+        agentStatus.onCodexTurnCompleted = { [weak self] in self?.usage.codexTurnCompleted() }
+        agentStatus.setListensForUsage(usage.source == .claude)
         agentStatus.start()
         windowController?.show()
     }
@@ -133,6 +154,35 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
             item.target = self
             item.representedObject = agent.rawValue
             menu.addItem(item)
+        }
+        menu.addItem(.separator())
+        // Water level: one agent's usage limit, as radio choices.
+        let waterHeader = NSMenuItem(title: "Water level", action: nil, keyEquivalent: "")
+        waterHeader.isEnabled = false
+        menu.addItem(waterHeader)
+        for source in UsageSource.allCases {
+            let title: String
+            switch source {
+            case .off: title = "Off"
+            case .codex: title = "Codex weekly usage"
+            case .claude: title = "Claude Code 5-hour usage"
+            }
+            let item = NSMenuItem(title: title, action: #selector(selectUsageSource(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = source.rawValue
+            item.indentationLevel = 1
+            menu.addItem(item)
+        }
+        let usageInfo = NSMenuItem(title: "", action: nil, keyEquivalent: "")
+        usageInfo.isEnabled = false
+        usageInfo.indentationLevel = 1
+        menu.addItem(usageInfo)
+        usageObservation = usage.objectWillChange.prepend(()).sink { [weak self, weak usageInfo] _ in
+            DispatchQueue.main.async {
+                guard let self, let usageInfo else { return }
+                usageInfo.title = self.usage.summary
+                usageInfo.isHidden = self.usage.source == .off
+            }
         }
         menu.addItem(.separator())
         let storageError = NSMenuItem(title: "Storage problem…", action: #selector(showStorageError), keyEquivalent: "")
@@ -183,6 +233,20 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
 
     private func agent(of item: NSMenuItem) -> AgentKind? {
         (item.representedObject as? String).flatMap(AgentKind.init(rawValue:))
+    }
+
+    @objc private func selectUsageSource(_ sender: NSMenuItem) {
+        guard let source = (sender.representedObject as? String).flatMap(UsageSource.init(rawValue:)),
+              source != usage.source else { return }
+        do {
+            // Claude Code shares usage only with its status-line command.
+            if source == .claude, let executable = Bundle.main.executableURL {
+                try AgentHookBridge.installStatusLine(executable: executable)
+            }
+            if usage.source == .claude, source != .claude { try AgentHookBridge.uninstallStatusLine() }
+        } catch { showConnectionError(error); return }
+        usage.select(source)
+        agentStatus.setListensForUsage(source == .claude)
     }
 
     @objc private func toggleAgent(_ sender: NSMenuItem) {
@@ -240,6 +304,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemVali
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if menuItem.action == #selector(undoTaskRemoval) { return canUndoTaskRemoval }
+        if menuItem.action == #selector(selectUsageSource(_:)) {
+            menuItem.state = (menuItem.representedObject as? String) == usage.source.rawValue ? .on : .off
+            return true
+        }
         if menuItem.action == #selector(toggleAgent(_:)) {
             menuItem.state = agent(of: menuItem).map(AgentHookBridge.isInstalled) == true ? .on : .off
             return true

@@ -91,6 +91,7 @@ struct TuckedTubeView: View {
     let tasks: [TaskItem]
     @ObservedObject var agentStatus: AgentStatusStore
     @ObservedObject var interaction: AppInteraction
+    @ObservedObject var usage: AgentUsageStore
 
     private var statusAnimationsPaused: Bool { interaction.isDocking }
 
@@ -104,6 +105,7 @@ struct TuckedTubeView: View {
         ZStack {
             ZStack {
                 TubeBody()
+                TubeWater(fraction: usage.fraction)
                 TubeRim()
                     .frame(height: TubeMetrics.mouthHeight)
                     .frame(maxHeight: .infinity, alignment: .top)
