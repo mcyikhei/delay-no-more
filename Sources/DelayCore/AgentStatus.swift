@@ -26,7 +26,7 @@ public struct AgentStatusSnapshot: Equatable, Sendable {
         case .working: return "Agent is working"
         case .waiting: return "Agent needs a decision or approval"
         case .failed: return "Agent turn failed"
-        case .finished: return "Agent turn finished. Hover over the pet to acknowledge."
+        case .finished: return "Agent turn finished. Click the tube to open the session."
         case .idle:
             switch cue {
             case .stopped: return "Observed agent turn ended"
@@ -124,6 +124,16 @@ public struct AgentEvent: Codable, Equatable, Sendable {
         }
         return status == nil || statuses.contains(status!)
     }
+}
+
+/// One agent session the user can be taken to.
+public struct AgentSessionRef: Equatable, Sendable {
+    public let agent: AgentKind
+    public let sessionID: String
+    public let pid: Int32?
+    public let activity: AgentActivity
+
+    public var key: String { agent.rawValue + ":" + sessionID }
 }
 
 /// Activity stays latched until a definite replacement state arrives.
@@ -278,6 +288,29 @@ public struct AgentStatusReducer: Sendable {
         }
     }
 
+    public func activity(of ref: (agent: AgentKind, sessionID: String)) -> AgentActivity? {
+        sessions[ref.agent.rawValue + ":" + ref.sessionID]?.activity
+    }
+
+    /// The session behind the colour the tube shows: the latest waiting,
+    /// failed or finished session matching the combined activity.
+    public func attentionTarget() -> AgentSessionRef? {
+        let activity = snapshot.activity
+        guard [.waiting, .failed, .finished].contains(activity) else { return nil }
+        return sessions.values.filter { $0.activity == activity }
+            .max { ($0.time, $0.sessionID) < ($1.time, $1.sessionID) }
+            .map { AgentSessionRef(agent: $0.agent, sessionID: $0.sessionID, pid: $0.pid, activity: $0.activity) }
+    }
+
+    /// The user opened this session: a finished or failed outcome has been
+    /// seen and becomes idle. A waiting session stays until answered.
+    public mutating func markOpened(_ ref: AgentSessionRef, at now: Date = Date()) {
+        let key = ref.agent.rawValue + ":" + ref.sessionID
+        guard let activity = sessions[key]?.activity, activity == .finished || activity == .failed else { return }
+        sessions[key]?.activity = .idle
+        refresh(at: now)
+    }
+
     public mutating func acknowledgeCompletion(at now: Date = Date()) {
         guard snapshot.activity == .finished else { return }
         for id in Array(sessions.keys) where sessions[id]?.activity == .finished { sessions[id]?.activity = .idle }
@@ -330,10 +363,13 @@ public struct AgentStatusPreview: Sendable {
         return now < expires
     }
 
-    /// Hovering a previewed green ends the preview, like a real completion.
+    /// A previewed green ends like a real completion.
     public mutating func acknowledgeCompletion() {
         if activity == .finished { activity = nil; expires = nil }
     }
+
+    /// Clicking the tube during a preview ends it; nothing real is opened.
+    public mutating func end() { activity = nil; expires = nil }
 
     public func overlay(_ live: AgentStatusSnapshot, at now: Date = Date()) -> AgentStatusSnapshot {
         guard isActive(at: now), let activity else { return live }

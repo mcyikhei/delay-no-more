@@ -2,8 +2,8 @@
 # Builds a release app bundle at dist/Delay No More.app (ad-hoc signed).
 set -eu
 root="${0:A:h:h}"
-version="1.10.4"
-build="25"
+version="1.11.0"
+build="26"
 app_dir="$root/dist/Delay No More.app"
 # The newest Command Line Tools SDK has lacked a SwiftUI macro plugin before;
 # prefer the known-good 15.2 SDK when it is installed.
@@ -33,6 +33,7 @@ cat > "$app_dir/Contents/Info.plist" <<PLIST
 <key>CFBundleIconFile</key><string>AppIcon</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>LSUIElement</key><true/>
+<key>NSAppleEventsUsageDescription</key><string>Delay No More switches to the terminal tab of the agent session you clicked.</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 PLIST

@@ -87,6 +87,9 @@ final class AgentStatusStore: ObservableObject {
     private var previewTask: Task<Void, Never>?
     private var livenessTask: Task<Void, Never>?
     private let log = StatusLog()
+    /// Where Claude Code sessions needing attention live, found once when
+    /// they enter that state so a click works even after the process exits.
+    private var locations: [String: SessionLocation] = [:]
     /// Agents whose hooks are installed. Events from any other agent, such as
     /// a still-open session after disconnecting, are ignored.
     private(set) var connected: Set<AgentKind> = []
@@ -168,6 +171,35 @@ final class AgentStatusStore: ObservableObject {
         reducer.receive(event)
         if event.agent == .codex, event.event == "TurnCompleted" { onCodexTurnCompleted?() }
         log.record(event, note: "\(before.rawValue)->\(reducer.snapshot.activity.rawValue)")
+        rememberLocation(for: event)
+        afterReduce()
+    }
+
+    private func rememberLocation(for event: AgentEvent) {
+        guard event.agent == .claude, let pid = event.pid,
+              let activity = reducer.activity(of: (event.agent, event.sessionID)),
+              [.waiting, .failed, .finished].contains(activity) else { return }
+        let key = event.agent.rawValue + ":" + event.sessionID
+        guard locations[key] == nil, let location = SessionLocator.locate(pid: pid) else { return }
+        if locations.count >= 32 { locations.removeAll() }
+        locations[key] = location
+    }
+
+    /// A click on the tube body: open the latest session behind the colour
+    /// shown. Finished and failed outcomes then count as seen.
+    func openAttention() {
+        if preview.isActive() {
+            preview.end(); previewTask?.cancel(); previewTask = nil
+            log.note("click ended the status preview")
+            publish()
+            return
+        }
+        guard let target = reducer.attentionTarget() else { return }
+        let location = locations[target.key]
+        let outcome = SessionLocator.open(target, location: location)
+        log.note("click opened \(target.agent.rawValue) s=\(StatusLog.shortHash(target.sessionID)) \(target.activity.rawValue) via \(outcome.rawValue)")
+        reducer.markOpened(target)
+        if target.activity != .waiting { locations.removeValue(forKey: target.key) }
         afterReduce()
     }
 
@@ -224,13 +256,6 @@ final class AgentStatusStore: ObservableObject {
         }
     }
 
-    func acknowledgeCompletion() {
-        guard snapshot.activity == .finished else { return }
-        preview.acknowledgeCompletion()
-        reducer.acknowledgeCompletion()
-        publish()
-    }
-
     func stop() {
         generation = UUID()
         turnMonitor?.stop(); turnMonitor = nil
@@ -240,6 +265,7 @@ final class AgentStatusStore: ObservableObject {
         listener?.stop(); listener = nil
         preview = AgentStatusPreview()
         connected = []
+        locations = [:]
         reducer.disconnect(); publish()
     }
 }

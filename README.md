@@ -1,6 +1,6 @@
 # Delay No More
 
-A small transparent glass tube on the Mac desktop that holds your to-do cards and shows what your coding agents (Codex and Claude Code) are doing. Native SwiftUI + AppKit, arm64, macOS 13+, no network, no Dock icon. Current version: 1.10.4.
+A small transparent glass tube on the Mac desktop that holds your to-do cards and shows what your coding agents (Codex and Claude Code) are doing. Native SwiftUI + AppKit, arm64, macOS 13+, no network, no Dock icon. Current version: 1.11.0.
 
 ```
 Package.swift
@@ -36,7 +36,7 @@ The glass gets a glowing colored outline (no fill, no animation), readable on li
 | Blue | Some observed session is working |
 | Yellow | A session waits for approval or an answer (outranks blue) |
 | Red | A turn failed (after all work ends, outranks green) |
-| Green | A turn finished — hover to acknowledge |
+| Green | A turn finished — click the tube to open it |
 | None, sleepy face | No status yet |
 
 All sessions of both agents combine into one status: yellow > blue > red > green > idle. A session that has started but done nothing yet never hides another session's result. A new prompt clears old red/green.
@@ -44,6 +44,11 @@ All sessions of both agents combine into one status: yellow > blue > red > green
 - **Claude Code** (all sessions on this Mac, main agent only): prompt/tools → blue; permission prompt or AskUserQuestion → yellow; `Stop` → green; `StopFailure` → red; an idle prompt after Esc → neutral; `SessionEnd` clears active work.
 - **Codex** (desktop app sessions): hooks give blue/yellow; green/red come only from the stored turn outcome, read by `CodexTurnMonitor` through `codex app-server` (`thread/turns/list`, items not loaded). It polls every 3 s, then 10 s after 2 min and 30 s after 10 min, and recycles the server every 15 min.
 - **No stuck colors from dead sessions:** each event records the agent process that ran the hook. Every 30 s, active sessions whose agent process has exited are removed.
+- **Open the session behind the colour:** when the tube is yellow, red or green, a quick click on the glass body (not the mouth, not a card) opens the latest session in that colour. Pressing and dragging still moves the pet; a long still press does nothing.
+  - Codex: opens the thread in ChatGPT.app via `codex://threads/<id>`.
+  - Claude Code in iTerm2 or Terminal.app: brings that exact tab forward. macOS asks once for permission to control the terminal (it may ask again after a rebuild, since the app is ad-hoc signed). Without permission, or in another app (VS Code, Ghostty…), the hosting app is brought forward instead.
+  - Opening a red or green session marks it seen; the tube goes idle once every result has been opened. Yellow stays until you answer. Hovering no longer clears green.
+  - Cost: the tab is located once when a session turns yellow/red/green (two `sysctl` calls per ancestor process); nothing polls.
 - **Privacy:** hooks forward only event name, session/turn IDs, time and owner PID. They never approve, deny or alter agent work.
 
 **Connect:** tick **Codex activity** or **Claude Code activity** in the menu bar (untick to disconnect). Unticking one agent drops only its sessions and immediately ignores it, including sessions still open; the other agent's status is kept. Or from a shell:
@@ -68,7 +73,7 @@ The menu line under the choices shows e.g. `58% left · resets 14:30`. The last 
 ```sh
 '.../DelayNoMore' --status-preview working|waiting|failed|finished|clear [seconds ≤ 60]
 ```
-A preview overlays the pet. When it ends, the current live status shows. Hovering a green preview ends it.
+A preview overlays the pet. When it ends, the current live status shows. Clicking the tube ends a preview without opening anything.
 
 **Diagnostics:** `~/Library/Logs/DelayNoMore/status.log` (≤ 256 KB, rotated). Each line: agent, event, hashed session/turn IDs, state transition, monitor match. No prompts, payloads or task names.
 

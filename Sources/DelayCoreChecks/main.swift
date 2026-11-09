@@ -395,7 +395,7 @@ check("Codex work remains blue until explicit completion without a neutral gap")
     states.append(reducer.snapshot.activity)
     try expect(states == [.working, .working, .working, .working, .finished], "Stop, SessionEnd, or silence inserted a neutral state before completion")
     reducer.acknowledgeCompletion(at: finished)
-    try expect(reducer.snapshot.activity == .idle, "Hover did not acknowledge the completed result")
+    try expect(reducer.snapshot.activity == .idle, "Acknowledging did not clear the completed result")
 }
 
 check("Codex waiting remains latched until work or an explicit outcome resumes") {

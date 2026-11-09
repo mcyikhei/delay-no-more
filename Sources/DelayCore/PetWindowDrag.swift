@@ -22,3 +22,13 @@ public struct PetWindowDrag {
         return origin
     }
 }
+
+/// A press on the tube body is a click when it never moved far enough to
+/// drag the pet and was released quickly; a long still press does nothing.
+public enum PetClick {
+    public static let maxHold: Double = 0.6
+
+    public static func isClick(moved: Bool, held: Double) -> Bool {
+        !moved && held.isFinite && held >= 0 && held < maxHold
+    }
+}

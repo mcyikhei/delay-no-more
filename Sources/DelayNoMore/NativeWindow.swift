@@ -10,18 +10,21 @@ final class StackPanel: NSPanel {
     var prepareForTextInput: ((NSEvent) -> Void)?
     var canStartPetDrag: ((NSEvent) -> Bool)?
     var dragStarted: (() -> Void)?
-    var dragFinished: ((Bool) -> Void)?
+    /// moved: the pet was dragged; click: a quick press that never moved.
+    var dragFinished: ((_ moved: Bool, _ click: Bool) -> Void)?
     private var petDrag: PetWindowDrag?
+    private var pressTime: TimeInterval = 0
     private var suppressingSecondaryClick = false
 
     override var canBecomeKey: Bool { keyboardRequested }
     override var canBecomeMain: Bool { false }
 
-    func finishPetDrag() {
+    func finishPetDrag(released: Bool = false) {
         guard let drag = petDrag else { return }
         petDrag = nil
         if drag.hasMoved { NSCursor.pop() }
-        dragFinished?(drag.hasMoved)
+        let click = released && PetClick.isClick(moved: drag.hasMoved, held: ProcessInfo.processInfo.systemUptime - pressTime)
+        dragFinished?(drag.hasMoved, click)
     }
 
     override func sendEvent(_ event: NSEvent) {
@@ -33,6 +36,7 @@ final class StackPanel: NSPanel {
             if canStartPetDrag?(event) == true {
                 petDrag = PetWindowDrag(pointer: convertPoint(toScreen: event.locationInWindow),
                                         windowOrigin: frame.origin)
+                pressTime = event.timestamp
                 dragStarted?()
                 return
             }
@@ -54,7 +58,7 @@ final class StackPanel: NSPanel {
                 return
             }
             if petDrag != nil {
-                finishPetDrag()
+                finishPetDrag(released: true)
                 return
             }
         case .rightMouseDown, .rightMouseDragged, .rightMouseUp:
@@ -155,8 +159,6 @@ final class StackWindowController: NSObject, NSWindowDelegate {
         stackHostingView.autoresizingMask = [.width, .height]
         expandedContainer.addSubview(stackHostingView)
 
-        expandedContainer.hovered = { [weak self] in self?.agentStatus.acknowledgeCompletion() }
-        tuckedHitView.hovered = { [weak self] in self?.agentStatus.acknowledgeCompletion() }
         expandedContainer.entered = { [weak self] in self?.cancelHide() }
         expandedContainer.exited = { [weak self] in self?.scheduleTuck() }
         tuckedHitView.entered = { [weak self] in self?.scheduleReveal() }
@@ -167,11 +169,12 @@ final class StackWindowController: NSObject, NSWindowDelegate {
             self?.isDraggingWindow = true
             self?.cancelHide()
         }
-        panel.dragFinished = { [weak self] moved in
+        panel.dragFinished = { [weak self] moved, click in
             guard let self else { return }
             self.isDraggingWindow = false
             if moved { self.finishedWindowDrag() }
             else { self.scheduleTuck() }
+            if click { self.agentStatus.openAttention() }
         }
         panel.prepareForTextInput = { [weak self] event in self?.resumeDraftInput(with: event) }
 

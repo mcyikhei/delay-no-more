@@ -459,7 +459,7 @@ enum AgentStatusSelfTest {
         check(preview.overlay(live.snapshot, at: at(11)).activity == .finished, "preview expiry reveals the latest live state")
         preview.apply(AgentEvent(sessionID: "preview", event: "Preview", time: now.timeIntervalSince1970, status: "finished", duration: 30), at: now)
         preview.acknowledgeCompletion()
-        check(!preview.isActive(at: at(1)), "hover ends a green preview")
+        check(!preview.isActive(at: at(1)), "acknowledging ends a green preview")
         check(!AgentEvent(sessionID: "preview", event: "Preview", time: now.timeIntervalSince1970, status: "working", duration: 600).isValid(at: now),
               "previews are bounded to 60 seconds")
 
