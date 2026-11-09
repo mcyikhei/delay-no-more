@@ -2,8 +2,8 @@
 # Builds a release app bundle at dist/Delay No More.app (ad-hoc signed).
 set -eu
 root="${0:A:h:h}"
-version="1.11.2"
-build="28"
+version="1.11.3"
+build="29"
 app_dir="$root/dist/Delay No More.app"
 # The newest Command Line Tools SDK has lacked a SwiftUI macro plugin before;
 # prefer the known-good 15.2 SDK when it is installed.

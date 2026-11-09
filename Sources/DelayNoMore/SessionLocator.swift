@@ -79,18 +79,28 @@ enum SessionLocator {
     /// AppleScript that brings forward the tab whose session uses `tty`.
     static func focusScript(bundleID: String, tty: String) -> String? {
         guard isValidTTY(tty) else { return nil }
+        // Activate first and wait until frontmost: only the active app's
+        // window raise makes macOS switch to that window's desktop/screen.
+        // The window is raised last.
+        let waitForFront = """
+                repeat 20 times
+                    if frontmost then exit repeat
+                    delay 0.05
+                end repeat
+        """
         switch bundleID {
         case iTermBundleID:
             return """
             tell application id "\(iTermBundleID)"
+                activate
+            \(waitForFront)
                 repeat with w in windows
                     repeat with t in tabs of w
                         repeat with s in sessions of t
                             if tty of s is "\(tty)" then
-                                select w
                                 select t
                                 select s
-                                activate
+                                select w
                                 return true
                             end if
                         end repeat
@@ -102,12 +112,13 @@ enum SessionLocator {
         case terminalBundleID:
             return """
             tell application id "\(terminalBundleID)"
+                activate
+            \(waitForFront)
                 repeat with w in windows
                     repeat with t in tabs of w
                         if tty of t is "\(tty)" then
                             set selected tab of w to t
                             set index of w to 1
-                            activate
                             return true
                         end if
                     end repeat

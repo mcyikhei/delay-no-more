@@ -89,6 +89,22 @@ enum SessionOpenSelfTest {
               "the iTerm2 script selects the tab with that terminal")
         check(SessionLocator.focusScript(bundleID: SessionLocator.terminalBundleID, tty: "/dev/ttys004")?.contains("selected tab") == true,
               "Terminal.app tabs can be selected too")
+        func position(_ text: String, in source: String?) -> Int {
+            guard let source, let range = source.range(of: text) else { return Int.max }
+            return source.distance(from: source.startIndex, to: range.lowerBound)
+        }
+        if let iterm = script {
+            check(position("activate", in: iterm) < position("repeat with w", in: iterm)
+                  && position("repeat 20 times", in: iterm) < position("repeat with w", in: iterm)
+                  && iterm.contains("if frontmost then exit repeat"),
+                  "iTerm2 is activated and frontmost before the tab is chosen, so macOS switches desktop")
+            check(position("select s", in: iterm) < position("select w", in: iterm),
+                  "the window is raised last, moving to its desktop and screen")
+        } else { check(false, "iTerm2 focus script") }
+        let terminal = SessionLocator.focusScript(bundleID: SessionLocator.terminalBundleID, tty: "/dev/ttys004")
+        check(position("activate", in: terminal) < position("repeat with w", in: terminal)
+              && position("selected tab", in: terminal) < position("set index of w to 1", in: terminal),
+              "Terminal.app is activated first and raises the window last")
         check(SessionLocator.focusScript(bundleID: SessionLocator.iTermBundleID, tty: "/dev/ttys1\"x") == nil
               && SessionLocator.focusScript(bundleID: "com.example.other", tty: "/dev/ttys004") == nil,
               "no script for invalid terminals or unknown apps")
