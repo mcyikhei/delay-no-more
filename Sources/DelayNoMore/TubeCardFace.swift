@@ -15,8 +15,19 @@ struct TubeCardFace: View {
         if scrollsOnHover {
             HoveringCardTitle(title: title, name: task.name, color: task.color)
         } else {
-            title.lineLimit(1).modifier(TubeCardSurface(color: task.color))
+            ClippedCardTitle(title: title).modifier(TubeCardSurface(color: task.color))
         }
+    }
+}
+
+/// Shows as much of a long title as fits and cuts it at the card edge, with no "…".
+private struct ClippedCardTitle: View {
+    let title: Text
+
+    var body: some View {
+        title.lineLimit(1).fixedSize(horizontal: true, vertical: false)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .clipped()
     }
 }
 
@@ -37,7 +48,7 @@ private struct HoveringCardTitle: View {
                 if scrolling {
                     fullTitle.offset(x: -offset)
                 } else {
-                    title.lineLimit(1)
+                    fullTitle
                 }
             }
             .frame(width: viewport.size.width, height: viewport.size.height, alignment: .leading)
