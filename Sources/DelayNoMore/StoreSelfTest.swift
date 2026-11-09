@@ -78,6 +78,7 @@ enum StoreSelfTest {
         AgentStatusSelfTest.run(check: check)
         UsageSelfTest.run(check: check)
         SessionOpenSelfTest.run(check: check)
+        CodexThreadSelfTest.run(check: check)
 
         check(TubeMetrics.width <= 224 && TubeMetrics.height + TubeMetrics.draftHeadroom <= 243,
               "upright tube and draft fit within the installed Codex pet's maximum frame")

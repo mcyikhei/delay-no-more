@@ -1,6 +1,6 @@
 # Delay No More
 
-A small transparent glass tube on the Mac desktop that holds your to-do cards and shows what your coding agents (Codex and Claude Code) are doing. Native SwiftUI + AppKit, arm64, macOS 13+, no network, no Dock icon. Current version: 1.11.0.
+A small transparent glass tube on the Mac desktop that holds your to-do cards and shows what your coding agents (Codex and Claude Code) are doing. Native SwiftUI + AppKit, arm64, macOS 13+, no network, no Dock icon. Current version: 1.11.1.
 
 ```
 Package.swift
@@ -42,7 +42,7 @@ The glass gets a glowing colored outline (no fill, no animation), readable on li
 All sessions of both agents combine into one status: yellow > blue > red > green > idle. A session that has started but done nothing yet never hides another session's result. A new prompt clears old red/green.
 
 - **Claude Code** (all sessions on this Mac, main agent only): prompt/tools → blue; permission prompt or AskUserQuestion → yellow; `Stop` → green; `StopFailure` → red; an idle prompt after Esc → neutral; `SessionEnd` clears active work.
-- **Codex** (desktop app sessions): hooks give blue/yellow; green/red come only from the stored turn outcome, read by `CodexTurnMonitor` through `codex app-server` (`thread/turns/list`, items not loaded). It polls every 3 s, then 10 s after 2 min and 30 s after 10 min, and recycles the server every 15 min.
+- **Codex** (desktop app sessions): hooks give blue/yellow; green/red come only from the stored turn outcome, read by `CodexTurnMonitor` through `codex app-server` (`thread/turns/list`, items not loaded). It polls every 3 s, then 10 s after 2 min and 30 s after 10 min, and recycles the server every 15 min. ChatGPT also runs hidden helper threads (titles, suggestions, memory) that fire hooks but are never saved: once Codex has sent Stop/SessionEnd for one and the app-server answers "thread not loaded", it is dropped. An "interrupted" reading before Stop is ignored, because a second app-server reading a turn mid-write reports it that way; a real Esc arrives as an Interrupt hook.
 - **No stuck colors from dead sessions:** each event records the agent process that ran the hook. Every 30 s, active sessions whose agent process has exited are removed.
 - **Open the session behind the colour:** when the tube is yellow, red or green, a quick click on the glass body (not the mouth, not a card) opens the latest session in that colour. Pressing and dragging still moves the pet; a long still press does nothing.
   - Codex: opens the thread in ChatGPT.app via `codex://threads/<id>`.

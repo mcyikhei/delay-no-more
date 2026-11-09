@@ -106,7 +106,7 @@ public struct AgentEvent: Codable, Equatable, Sendable {
         let allowed = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Stop", "Interrupt",
                        "SessionEnd", "PermissionRequest", "PreModelRequest", "DecisionRequest",
                        "DecisionRequestAsync", "TurnStarted", "TurnCompleted", "ThreadStatus",
-                       "StopFailure", "IdlePrompt", "Preview", "Usage"]
+                       "StopFailure", "IdlePrompt", "Preview", "Usage", "ThreadUnavailable"]
         let statuses = ["completed", "failed", "interrupted", "working", "waiting", "idle", "unknown"]
         guard (schema == 1 || schema == 2), !eventID.isEmpty, eventID.utf8.count <= 128,
               !sessionID.isEmpty, sessionID.utf8.count <= 256,
@@ -151,6 +151,8 @@ public struct AgentStatusReducer: Sendable {
         var activity: AgentActivity
         var decisionPending = false
         var pid: Int32?
+        /// Codex sent Stop or SessionEnd for the current turn.
+        var stopped = false
     }
     public private(set) var snapshot = AgentStatusSnapshot()
     private var sessions: [String: Session] = [:]
@@ -208,6 +210,21 @@ public struct AgentStatusReducer: Sendable {
         let claude = event.agent == .claude
         if event.event == "TurnCompleted" {
             guard let turn = event.turnID, isTracking(agent: event.agent, session: event.sessionID, turn: turn) else { return }
+            // A second app-server reading a turn still being written reports
+            // it as interrupted. Only trust that once Codex has said Stop;
+            // a real Esc arrives as an Interrupt hook.
+            if event.status == "interrupted", sessions[key]?.stopped != true { return }
+        }
+        // Codex never stores its hidden helper threads (titles, suggestions,
+        // memory), so no outcome can ever be read for them. Once Codex has
+        // said Stop, "not loaded" proves the thread is one of those.
+        if event.event == "ThreadUnavailable" {
+            guard !claude, let session = sessions[key], session.stopped,
+                  session.activity == .working || session.activity == .waiting,
+                  event.turnID == nil || event.turnID == session.turn else { return }
+            sessions.removeValue(forKey: key)
+            refresh(at: now)
+            return
         }
         // Resume/compaction can emit SessionStart during an existing turn.
         // It carries no activity evidence and must not erase a known state.
@@ -273,9 +290,11 @@ public struct AgentStatusReducer: Sendable {
             if pending && activity == .working { activity = .waiting }
             let startsTurn = ["UserPromptSubmit", "TurnStarted"].contains(event.event)
             let turn = startsTurn ? event.turnID : event.turnID ?? sessions[key]?.turn
+            let stopped = ["Stop", "SessionEnd"].contains(event.event)
+                || (!startsTurn && sessions[key]?.stopped == true)
             sessions[key] = Session(agent: event.agent, sessionID: event.sessionID, turn: turn, time: event.time,
                                     activity: activity, decisionPending: pending,
-                                    pid: event.pid ?? sessions[key]?.pid)
+                                    pid: event.pid ?? sessions[key]?.pid, stopped: stopped)
         }
         refresh(at: now)
         if snapshot.activity == .idle && activity == .idle {

@@ -113,6 +113,16 @@ final class AgentStatusStore: ObservableObject {
                 Task { @MainActor [weak self] in
                     guard let self, self.generation == generation, let turn = event.turnID else { return }
                     let matched = self.reducer.isTracking(agent: .codex, session: event.sessionID, turn: turn)
+                    if event.event == "ThreadUnavailable" {
+                        // Polled every few seconds; only log when it ends a session.
+                        guard matched else { return }
+                        self.reducer.receive(event)
+                        if self.reducer.activity(of: (.codex, event.sessionID)) == nil {
+                            log.record(event, note: "hidden Codex thread dropped -> \(self.reducer.snapshot.activity.rawValue)")
+                            self.afterReduce()
+                        }
+                        return
+                    }
                     log.record(event, note: "monitor matched=\(matched)")
                     guard matched else { return }
                     self.apply(event)

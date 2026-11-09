@@ -139,7 +139,7 @@ final class CodexTurnMonitor: @unchecked Sendable {
             input = incoming.fileHandleForWriting
             output = handle
             write(["id": 1, "method": "initialize", "params": [
-                "clientInfo": ["name": "delay_no_more_status", "version": "1.10.3"],
+                "clientInfo": ["name": "delay_no_more_status", "version": "1.11.1"],
                 "capabilities": ["experimentalApi": true]
             ]])
             if timer == nil {
@@ -211,6 +211,10 @@ final class CodexTurnMonitor: @unchecked Sendable {
             if let event = Self.terminalEvent(from: message, session: session, turn: turn) {
                 tracked.removeValue(forKey: session)
                 receive(event)
+            } else if Self.isThreadNotLoaded(message) {
+                // Keep polling; the reducer decides whether this proves a hidden thread.
+                receive(AgentEvent(eventID: "unavailable:\(session):\(turn):\(id)", sessionID: session,
+                                   turnID: turn, event: "ThreadUnavailable"))
             }
             // No raw result, error text, turn item or message is retained.
         }
@@ -225,6 +229,13 @@ final class CodexTurnMonitor: @unchecked Sendable {
               (first["items"] as? [Any])?.isEmpty != false else { return nil }
         return AgentEvent(eventID: "terminal:\(session):\(turn):\(status)", sessionID: session,
                               turnID: turn, event: "TurnCompleted", status: status)
+    }
+
+    /// The app-server has no stored thread with this ID.
+    static func isThreadNotLoaded(_ message: [String: Any]) -> Bool {
+        guard message["result"] == nil, let error = message["error"] as? [String: Any],
+              let text = error["message"] as? String else { return false }
+        return text.hasPrefix("thread not loaded") || text.hasPrefix("thread not found")
     }
 
     private func shutdown() {
