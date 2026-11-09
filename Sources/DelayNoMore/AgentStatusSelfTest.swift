@@ -63,7 +63,7 @@ enum AgentStatusSelfTest {
         check(aggregate.snapshot.activity == .working && aggregate.snapshot.cue == nil && aggregate.snapshot.activeCount == 2,
               "a root Stop preserves both unresolved active turns")
         aggregate.receive(event("a", "TurnCompleted", "turn", 6, status: "failed"), at: at(6))
-        check(aggregate.snapshot.activity == .working, "another unresolved root keeps working after one explicit failure")
+        check(aggregate.snapshot.activity == .failed, "a failure shows at once even while another root still works")
         aggregate.receive(event("b", "TurnCompleted", "turn", 7, status: "completed"), at: at(7))
         check(aggregate.snapshot.activity == .failed, "failure becomes visible after every active root has an explicit outcome")
         aggregate.acknowledgeCompletion(at: at(7))
@@ -72,9 +72,11 @@ enum AgentStatusSelfTest {
         aggregate.receive(event("a", "Stop", "turn", 601), at: at(601))
         check(aggregate.snapshot.activity == .failed, "a generic Stop cannot clear an explicit failure")
         aggregate.receive(event("next", "TurnStarted", "next-turn", 602), at: at(602))
-        check(aggregate.snapshot.activity == .working, "a new cycle clears the previous terminal failure")
-        aggregate.acknowledgeCompletion(at: at(602))
-        check(aggregate.snapshot.activity == .working, "hover cannot acknowledge active work")
+        check(aggregate.snapshot.activity == .failed, "a new prompt in another session keeps an unseen failure")
+        if let failure = aggregate.attentionTarget() { aggregate.markOpened(failure, at: at(603)) }
+        check(aggregate.snapshot.activity == .finished, "opening the failure reveals the other unseen result")
+        if let result = aggregate.attentionTarget() { aggregate.markOpened(result, at: at(604)) }
+        check(aggregate.snapshot.activity == .working, "with every result opened the remaining work shows blue")
 
         var completed = CodexStatusReducer()
         completed.receive(event("done", "TurnStarted"), at: now)
@@ -97,7 +99,7 @@ enum AgentStatusSelfTest {
         concurrent.receive(event("a", "TurnStarted"), at: now)
         concurrent.receive(event("b", "TurnStarted"), at: now)
         concurrent.receive(event("a", "TurnCompleted", "turn", 1, status: "failed"), at: at(1))
-        check(concurrent.snapshot.activity == .working, "remaining active work takes priority over a completed failure")
+        check(concurrent.snapshot.activity == .failed, "a completed failure shows even while other work continues")
         concurrent.receive(event("b", "TurnCompleted", "turn", 2, status: "completed"), at: at(2))
         check(concurrent.snapshot.activity == .failed, "failure takes priority when all roots have stopped")
 
@@ -389,7 +391,7 @@ enum AgentStatusSelfTest {
         mixed.receive(claude("same-id", "UserPromptSubmit"), at: now)
         check(mixed.snapshot.activeCount == 2, "identical session IDs from different agents stay separate")
         mixed.receive(claude("same-id", "Stop", 1), at: at(1))
-        check(mixed.snapshot.activity == .working, "a finished Claude turn cannot turn green while Codex works")
+        check(mixed.snapshot.activity == .finished, "a finished Claude turn shows green even while Codex works")
         mixed.receive(claude("other", "PermissionRequest", 2), at: at(2))
         check(mixed.snapshot.activity == .waiting, "attention from either agent takes priority")
         mixed.receive(codex("same-id", "TurnCompleted", "turn", 3, status: "failed"), at: at(3))

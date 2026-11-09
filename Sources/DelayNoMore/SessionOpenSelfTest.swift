@@ -50,6 +50,22 @@ enum SessionOpenSelfTest {
         mixed.receive(claude("ask", "Stop", 6), at: at(6))
         check(mixed.attentionTarget()?.sessionID == "ask", "after answering, green opens the newest finish")
 
+        // Results show while other sessions still work; opening returns to blue.
+        var parallel = AgentStatusReducer()
+        parallel.receive(claude("A", "UserPromptSubmit", 0), at: at(0))
+        parallel.receive(claude("B", "UserPromptSubmit", 1), at: at(1))
+        parallel.receive(claude("A", "Stop", 2), at: at(2))
+        check(parallel.snapshot.activity == .finished && parallel.attentionTarget()?.sessionID == "A",
+              "A finishing turns the tube green while B still works")
+        parallel.receive(claude("C", "UserPromptSubmit", 3), at: at(3))
+        check(parallel.snapshot.activity == .finished, "a new prompt in another session keeps A's green")
+        if let a = parallel.attentionTarget() { parallel.markOpened(a, at: at(4)) }
+        check(parallel.snapshot.activity == .working, "opening A returns to blue for the sessions still working")
+        parallel.receive(claude("A", "UserPromptSubmit", 5), at: at(5))
+        parallel.receive(claude("A", "Stop", 6), at: at(6))
+        parallel.receive(claude("A", "UserPromptSubmit", 7), at: at(7))
+        check(parallel.snapshot.activity == .working, "a new prompt in A clears A's own result")
+
         // Red, from Codex.
         var failed = AgentStatusReducer()
         failed.receive(codex("thread_1", "TurnStarted", 0), at: at(0))

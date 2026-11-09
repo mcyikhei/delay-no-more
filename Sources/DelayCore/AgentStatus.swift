@@ -242,12 +242,8 @@ public struct AgentStatusReducer: Sendable {
         }
         seen.insert(event.eventID)
         if seen.count > 1024 { seen = [event.eventID] }
-        if ["UserPromptSubmit", "TurnStarted"].contains(event.event),
-           !sessions.values.contains(where: { $0.activity == .working || $0.activity == .waiting }) {
-            for id in Array(sessions.keys) where sessions[id]?.activity == .finished || sessions[id]?.activity == .failed {
-                sessions[id]?.activity = .idle
-            }
-        }
+        // A new prompt clears only its own session's result (it becomes
+        // working below); other sessions keep green/red until opened.
         let priorActivity = sessions[key]?.activity
         var activity: AgentActivity = .unknown
         switch event.event {
@@ -340,10 +336,12 @@ public struct AgentStatusReducer: Sendable {
     public mutating func refresh(at now: Date = Date()) {
         let active = sessions.values.filter { $0.activity == .working || $0.activity == .waiting }
         snapshot.activeCount = active.count
+        // Unseen results outrank ongoing work, so a finished session shows
+        // even while others are still working; only a waiting session wins.
         if active.contains(where: { $0.activity == .waiting }) { snapshot.activity = .waiting }
-        else if !active.isEmpty { snapshot.activity = .working }
         else if sessions.values.contains(where: { $0.activity == .failed }) { snapshot.activity = .failed }
         else if sessions.values.contains(where: { $0.activity == .finished }) { snapshot.activity = .finished }
+        else if !active.isEmpty { snapshot.activity = .working }
         // A session that has started but done nothing yet carries no evidence;
         // it must not hide another session's outcome or idle state.
         else if sessions.isEmpty || !sessions.values.contains(where: { $0.activity != .unknown }) { snapshot.activity = .unknown }

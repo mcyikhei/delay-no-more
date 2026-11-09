@@ -1,6 +1,6 @@
 # Delay No More
 
-A small transparent glass tube on the Mac desktop that holds your to-do cards and shows what your coding agents (Codex and Claude Code) are doing. Native SwiftUI + AppKit, arm64, macOS 13+, no network, no Dock icon. Current version: 1.11.1.
+A small transparent glass tube on the Mac desktop that holds your to-do cards and shows what your coding agents (Codex and Claude Code) are doing. Native SwiftUI + AppKit, arm64, macOS 13+, no network, no Dock icon. Current version: 1.11.2.
 
 ```
 Package.swift
@@ -35,11 +35,11 @@ The glass gets a glowing colored outline (no fill, no animation), readable on li
 |---|---|
 | Blue | Some observed session is working |
 | Yellow | A session waits for approval or an answer (outranks blue) |
-| Red | A turn failed (after all work ends, outranks green) |
-| Green | A turn finished — click the tube to open it |
+| Red | A turn failed and hasn't been opened yet (outranks green and blue) |
+| Green | A turn finished and hasn't been opened yet, even while other sessions still work — click the tube to open it |
 | None, sleepy face | No status yet |
 
-All sessions of both agents combine into one status: yellow > blue > red > green > idle. A session that has started but done nothing yet never hides another session's result. A new prompt clears old red/green.
+All sessions of both agents combine into one status: yellow > red > green > blue > idle. A session that has started but done nothing yet never hides another session's result. A new prompt clears only its own session's red/green; other sessions' results stay until opened.
 
 - **Claude Code** (all sessions on this Mac, main agent only): prompt/tools → blue; permission prompt or AskUserQuestion → yellow; `Stop` → green; `StopFailure` → red; an idle prompt after Esc → neutral; `SessionEnd` clears active work.
 - **Codex** (desktop app sessions): hooks give blue/yellow; green/red come only from the stored turn outcome, read by `CodexTurnMonitor` through `codex app-server` (`thread/turns/list`, items not loaded). It polls every 3 s, then 10 s after 2 min and 30 s after 10 min, and recycles the server every 15 min. ChatGPT also runs hidden helper threads (titles, suggestions, memory) that fire hooks but are never saved: once Codex has sent Stop/SessionEnd for one and the app-server answers "thread not loaded", it is dropped. An "interrupted" reading before Stop is ignored, because a second app-server reading a turn mid-write reports it that way; a real Esc arrives as an Interrupt hook.
